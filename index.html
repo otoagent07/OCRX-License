@@ -58,7 +58,7 @@ const API=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`;
 // ---- yardimcilar ----
 const todayStr=()=>new Date().toISOString().slice(0,10);
 const plusYears=(n)=>{const d=new Date();d.setFullYear(d.getFullYear()+n);return d.toISOString().slice(0,10)};
-const normMac=(m)=>(m||"").toUpperCase().replace(/[^0-9A-F]/g,"").match(/.{1,2}/g)?.join(":")||"";
+const normKey=(k)=>(k||"").trim().toUpperCase();
 const b64encode=(s)=>btoa(unescape(encodeURIComponent(s)));
 const b64decode=(s)=>decodeURIComponent(escape(atob(s.replace(/\n/g,""))));
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -200,31 +200,31 @@ function Devices({data,onChange,notify}){
   const filtered=useMemo(()=>data.devices.filter(d=>{
     if(hf!=="all"&&d.hotelId!==hf) return false;
     if(!q) return true; const s=q.toLowerCase();
-    return (d.mac||"").toLowerCase().includes(s)||(d.pcName||"").toLowerCase().includes(s)
+    return (d.key||"").toLowerCase().includes(s)||(d.pcName||"").toLowerCase().includes(s)
       ||hotelName(d.hotelId).toLowerCase().includes(s);
   }),[data,q,hf]);
 
   const save=(dev)=>{
-    const mac=normMac(dev.mac);
-    if(!mac){notify("Gecerli MAC girin.");return;}
-    const exists=data.devices.find(d=>d.mac===mac && d.id!==dev.id);
-    if(exists){notify("Bu MAC zaten kayitli.");return;}
-    const rec={...dev,mac};
+    const key=normKey(dev.key);
+    if(!key){notify("Gecerli KEY girin.");return;}
+    const exists=data.devices.find(d=>d.key===key && d.id!==dev.id);
+    if(exists){notify("Bu KEY zaten kayitli.");return;}
+    const rec={...dev,key};
     const list=data.devices.some(d=>d.id===rec.id)
       ? data.devices.map(d=>d.id===rec.id?rec:d) : [...data.devices,rec];
     onChange({...data,devices:list}); setForm(null);
   };
   const toggle=(d)=>onChange({...data,devices:data.devices.map(x=>x.id===d.id?{...x,active:!x.active}:x)});
-  const del=(d)=>{ if(confirm(`${d.pcName||d.mac} silinsin mi?`))
+  const del=(d)=>{ if(confirm(`${d.pcName||d.key} silinsin mi?`))
     onChange({...data,devices:data.devices.filter(x=>x.id!==d.id)}); };
 
   return <div className="card">
     <div className="row" style={{marginBottom:14}}>
       <h3 style={{margin:0}}>Cihazlar</h3>
-      <button className="btn ok right" onClick={()=>setForm({id:uid(),mac:"",pcName:"",hotelId:data.hotels[0]?.id||null,active:false,start:todayStr(),end:plusYears(2)})}>+ Cihaz Ekle</button>
+      <button className="btn ok right" onClick={()=>setForm({id:uid(),key:"",pcName:"",hotelId:data.hotels[0]?.id||null,active:false,start:todayStr(),end:plusYears(2)})}>+ Cihaz Ekle</button>
     </div>
     <div className="row" style={{marginBottom:12}}>
-      <div style={{flex:1,minWidth:200}}><input placeholder="Ara: MAC, PC adi, otel…" value={q} onChange={e=>setQ(e.target.value)}/></div>
+      <div style={{flex:1,minWidth:200}}><input placeholder="Ara: KEY, PC adi, otel…" value={q} onChange={e=>setQ(e.target.value)}/></div>
       <div style={{minWidth:180}}>
         <select value={hf} onChange={e=>setHf(e.target.value)}>
           <option value="all">Tum oteller</option>
@@ -234,12 +234,12 @@ function Devices({data,onChange,notify}){
     </div>
     <div style={{overflowX:"auto"}}>
     <table><thead><tr>
-      <th>Durum</th><th>MAC</th><th>PC Adi</th><th>Otel</th><th>Baslangic</th><th>Bitis</th><th style={{textAlign:"right"}}>Islem</th>
+      <th>Durum</th><th>KEY</th><th>PC Adi</th><th>Otel</th><th>Baslangic</th><th>Bitis</th><th style={{textAlign:"right"}}>Islem</th>
     </tr></thead><tbody>
       {filtered.length===0&&<tr><td colSpan="7" className="muted">Kayit yok.</td></tr>}
       {filtered.map(d=>{const s=deviceStatus(d);return <tr key={d.id}>
         <td><span className={"pill "+s.cls}>{s.txt}</span></td>
-        <td><code>{d.mac}</code></td><td>{d.pcName||"—"}</td><td>{hotelName(d.hotelId)}</td>
+        <td><code>{d.key}</code></td><td>{d.pcName||"—"}</td><td>{hotelName(d.hotelId)}</td>
         <td>{d.start}</td><td>{d.end}</td>
         <td style={{textAlign:"right",whiteSpace:"nowrap"}}>
           <button className={"btn sm "+(d.active?"ghost":"ok")} onClick={()=>toggle(d)}>{d.active?"Pasif yap":"Aktif et"}</button>{" "}
@@ -257,9 +257,9 @@ function DeviceForm({form,hotels,onCancel,onSave}){
   const set=(k,v)=>setF(s=>({...s,[k]:v}));
   return <div style={{position:"fixed",inset:0,background:"rgba(15,25,45,.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50}}>
     <div className="card" style={{width:440,maxWidth:"92vw"}}>
-      <h3 style={{marginTop:0}}>{form.mac?"Cihaz Duzenle":"Cihaz Ekle"}</h3>
-      <label>MAC Adresi</label>
-      <input value={f.mac} onChange={e=>set("mac",e.target.value)} placeholder="AA:BB:CC:DD:EE:FF"/>
+      <h3 style={{marginTop:0}}>{form.key?"Cihaz Duzenle":"Cihaz Ekle"}</h3>
+      <label>Cihaz Anahtarı (KEY)</label>
+      <input value={f.key} onChange={e=>set("key",e.target.value)} placeholder="XXXXX-XXXXX-XXXXX-XXXXX"/>
       <div style={{height:10}}/>
       <label>PC Adi</label>
       <input value={f.pcName} onChange={e=>set("pcName",e.target.value)} placeholder="Bilgisayar adi"/>

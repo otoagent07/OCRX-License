@@ -5,5 +5,15 @@
       "name": "RMOS"
     }
   ],
-  "devices": []
+  "devices": [
+    {
+      "id": "h19me0m",
+      "key": "6E85A-38C4E-CAB9A-D6402",
+      "pcName": "MAHONI",
+      "hotelId": "xlc03r2",
+      "active": true,
+      "start": "2026-07-03",
+      "end": "2028-07-03"
+    }
+  ]
 }

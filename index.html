@@ -120,6 +120,7 @@ function Panel({onLogout}){
   const [data,setData]=useState({hotels:[],devices:[]});
   const [sha,setSha]=useState(null);
   const [tab,setTab]=useState("devices");
+  const [hotelDevices,setHotelDevices]=useState(null); // Oteller>Cihazlar gorunumu
   const [toast,setToast]=useState("");
   const [loading,setLoading]=useState(true);
   const notify=(m)=>{setToast(m);setTimeout(()=>setToast(""),2600);};
@@ -152,7 +153,11 @@ function Panel({onLogout}){
     </div>
 
     {loading? <div className="card">Yukleniyor…</div> :
-      tab==="hotels"? <Hotels data={data} onChange={persist} notify={notify}/> :
+      tab==="hotels"? (hotelDevices
+        ? <Devices data={data} onChange={persist} notify={notify}
+                   lockedHotelId={hotelDevices} onBack={()=>setHotelDevices(null)}/>
+        : <Hotels data={data} onChange={persist} notify={notify}
+                  onOpenDevices={setHotelDevices}/>) :
       tab==="devices"? <Devices data={data} onChange={persist} notify={notify}/> :
       <Settings token={token} setToken={(t)=>{setToken(t);localStorage.setItem("ocrx_gh_token",t);}} reload={reload}/>}
 
@@ -161,7 +166,7 @@ function Panel({onLogout}){
 }
 
 // ---------------- OTELLER ----------------
-function Hotels({data,onChange,notify}){
+function Hotels({data,onChange,notify,onOpenDevices}){
   const [name,setName]=useState("");
   const add=()=>{ const n=name.trim(); if(!n)return;
     if(data.hotels.some(h=>h.name.toLowerCase()===n.toLowerCase())){notify("Bu otel zaten var.");return;}
@@ -183,7 +188,8 @@ function Hotels({data,onChange,notify}){
       <tbody>{data.hotels.length===0&&<tr><td colSpan="3" className="muted">Henuz otel yok.</td></tr>}
         {data.hotels.map(h=>{const c=data.devices.filter(d=>d.hotelId===h.id).length;
           return <tr key={h.id}><td><b>{h.name}</b></td><td>{c}</td>
-            <td style={{textAlign:"right"}}>
+            <td style={{textAlign:"right",whiteSpace:"nowrap"}}>
+              <button className="btn sm" onClick={()=>onOpenDevices(h.id)}>Cihazlar ({c})</button>{" "}
               <button className="btn ghost sm" onClick={()=>rename(h.id)}>Duzenle</button>{" "}
               <button className="btn danger sm" onClick={()=>del(h.id)}>Sil</button></td></tr>;})}
       </tbody></table>
@@ -191,18 +197,20 @@ function Hotels({data,onChange,notify}){
 }
 
 // ---------------- CIHAZLAR ----------------
-function Devices({data,onChange,notify}){
+function Devices({data,onChange,notify,lockedHotelId,onBack}){
   const [q,setQ]=useState("");
   const [hf,setHf]=useState("all");
   const [form,setForm]=useState(null); // ekleme/duzenleme formu
   const hotelName=(id)=>data.hotels.find(h=>h.id===id)?.name||"—";
+  // Oteller>Cihazlar gorunumu: otele kilitli (filtre gizli, yeni cihaz o otele).
+  const effHf = lockedHotelId || hf;
 
   const filtered=useMemo(()=>data.devices.filter(d=>{
-    if(hf!=="all"&&d.hotelId!==hf) return false;
+    if(effHf!=="all"&&d.hotelId!==effHf) return false;
     if(!q) return true; const s=q.toLowerCase();
     return (d.key||"").toLowerCase().includes(s)||(d.pcName||"").toLowerCase().includes(s)
       ||hotelName(d.hotelId).toLowerCase().includes(s);
-  }),[data,q,hf]);
+  }),[data,q,effHf]);
 
   const save=(dev)=>{
     const key=normKey(dev.key);
@@ -220,17 +228,18 @@ function Devices({data,onChange,notify}){
 
   return <div className="card">
     <div className="row" style={{marginBottom:14}}>
-      <h3 style={{margin:0}}>Cihazlar</h3>
-      <button className="btn ok right" onClick={()=>setForm({id:uid(),key:"",pcName:"",hotelId:data.hotels[0]?.id||null,active:false,start:todayStr(),end:plusYears(2)})}>+ Cihaz Ekle</button>
+      {lockedHotelId&&<button className="btn ghost sm" onClick={onBack}>← Oteller</button>}
+      <h3 style={{margin:0}}>{lockedHotelId? hotelName(lockedHotelId)+" — Cihazlar" : "Cihazlar"}</h3>
+      <button className="btn ok right" onClick={()=>setForm({id:uid(),key:"",pcName:"",hotelId:lockedHotelId||data.hotels[0]?.id||null,active:false,start:todayStr(),end:plusYears(2)})}>+ Cihaz Ekle</button>
     </div>
     <div className="row" style={{marginBottom:12}}>
       <div style={{flex:1,minWidth:200}}><input placeholder="Ara: KEY, PC adi, otel…" value={q} onChange={e=>setQ(e.target.value)}/></div>
-      <div style={{minWidth:180}}>
+      {!lockedHotelId&&<div style={{minWidth:180}}>
         <select value={hf} onChange={e=>setHf(e.target.value)}>
           <option value="all">Tum oteller</option>
           {data.hotels.map(h=><option key={h.id} value={h.id}>{h.name}</option>)}
         </select>
-      </div>
+      </div>}
     </div>
     <div style={{overflowX:"auto"}}>
     <table><thead><tr>

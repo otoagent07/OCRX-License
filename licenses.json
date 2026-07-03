@@ -5,15 +5,5 @@
       "name": "RMOS"
     }
   ],
-  "devices": [
-    {
-      "id": "lz1skat",
-      "key": "6E85A-38C4E-CAB9A-D6402",
-      "pcName": "ASD",
-      "hotelId": "xlc03r2",
-      "active": true,
-      "start": "2026-07-03",
-      "end": "2028-07-03"
-    }
-  ]
+  "devices": []
 }

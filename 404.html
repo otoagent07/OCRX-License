@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OCRX Lisans Paneli</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root{
+    --accent:#1565c0; --accent2:#0d47a1; --bg:#eef2f7; --card:#ffffff;
+    --ok:#2e7d32; --off:#9aa4b2; --danger:#c62828; --border:#d5dde8; --muted:#6b7480;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,Arial,sans-serif;background:var(--bg);color:#1a1f27}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 14px;font-weight:600;font-size:14px}
+  input,select{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:#fff;width:100%}
+  .btn{background:var(--accent);color:#fff}.btn:hover{background:var(--accent2)}
+  .btn.ghost{background:#e8eef7;color:var(--accent2)}
+  .btn.ok{background:var(--ok)}.btn.danger{background:var(--danger)}
+  .btn.sm{padding:6px 10px;font-size:13px}
+  .wrap{max-width:1080px;margin:0 auto;padding:18px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(20,40,80,.05)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:0 0 4px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle}
+  th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .pill.on{background:#e6f4ea;color:var(--ok)}.pill.off{background:#eef1f5;color:var(--off)}
+  .pill.exp{background:#fdecea;color:var(--danger)}
+  .topbar{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;border-radius:14px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .topbar h1{margin:0;font-size:20px;letter-spacing:.5px}
+  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tab{background:#e3eefc;color:var(--accent2)}.tab.active{background:var(--accent);color:#fff}
+  .muted{color:var(--muted)}.right{margin-left:auto}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .toast{position:fixed;right:18px;bottom:18px;background:#111;color:#fff;padding:12px 16px;border-radius:10px;opacity:.95;font-size:14px;max-width:340px}
+  .login-bg{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1565c0,#0d47a1)}
+  .login-card{background:#fff;border-radius:16px;padding:32px;width:360px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+  .logo{width:64px;height:64px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;margin:0 auto 14px}
+  .err{color:var(--danger);font-size:13px;margin-top:8px;font-weight:600}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  code{background:#eef2f7;padding:1px 6px;border-radius:5px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useMemo} = React;
+
+// ---- Sabit yapilandirma ----
+const OWNER="otoagent07", REPO="OCRX-License", FILE="licenses.json", BRANCH="main";
+const ADMIN_USER="rmos", ADMIN_PASS="19830126";
+const API=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`;
+
+// ---- yardimcilar ----
+const todayStr=()=>new Date().toISOString().slice(0,10);
+const plusYears=(n)=>{const d=new Date();d.setFullYear(d.getFullYear()+n);return d.toISOString().slice(0,10)};
+const normMac=(m)=>(m||"").toUpperCase().replace(/[^0-9A-F]/g,"").match(/.{1,2}/g)?.join(":")||"";
+const b64encode=(s)=>btoa(unescape(encodeURIComponent(s)));
+const b64decode=(s)=>decodeURIComponent(escape(atob(s.replace(/\n/g,""))));
+const uid=()=>Math.random().toString(36).slice(2,9);
+
+function deviceStatus(d){
+  if(!d.active) return {cls:"off",txt:"Pasif"};
+  if(d.end && d.end < todayStr()) return {cls:"exp",txt:"Suresi doldu"};
+  return {cls:"on",txt:"Aktif"};
+}
+
+// ---- GitHub okuma/yazma ----
+async function ghLoad(token){
+  const headers={"Accept":"application/vnd.github+json"};
+  if(token) headers.Authorization=`Bearer ${token}`;
+  const r=await fetch(API+`?ref=${BRANCH}&t=`+Date.now(),{headers});
+  if(r.status===404) return {data:{hotels:[],devices:[]},sha:null};
+  if(!r.ok) throw new Error("GitHub okuma hatasi: "+r.status);
+  const j=await r.json();
+  return {data:JSON.parse(b64decode(j.content)),sha:j.sha};
+}
+async function ghSave(token,data,sha){
+  const body={message:"lisans guncelleme",branch:BRANCH,
+    content:b64encode(JSON.stringify(data,null,2))};
+  if(sha) body.sha=sha;
+  const r=await fetch(API,{method:"PUT",
+    headers:{Authorization:`Bearer ${token}`,"Accept":"application/vnd.github+json"},
+    body:JSON.stringify(body)});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||("Kaydetme hatasi "+r.status));}
+  return (await r.json()).content.sha;
+}
+
+// ================= UYGULAMA =================
+function App(){
+  const [authed,setAuthed]=useState(sessionStorage.getItem("ocrx_admin")==="1");
+  if(!authed) return <Login onOk={()=>setAuthed(true)} />;
+  return <Panel onLogout={()=>{sessionStorage.removeItem("ocrx_admin");setAuthed(false);}} />;
+}
+
+function Login({onOk}){
+  const [u,setU]=useState(""),[p,setP]=useState(""),[e,setE]=useState("");
+  const go=()=>{ if(u===ADMIN_USER&&p===ADMIN_PASS){sessionStorage.setItem("ocrx_admin","1");onOk();}
+    else setE("Kullanici adi veya sifre hatali."); };
+  return <div className="login-bg"><div className="login-card">
+    <div className="logo">OCRX</div>
+    <h2 style={{textAlign:"center",margin:"0 0 18px"}}>Lisans Paneli</h2>
+    <label>Kullanici Adi</label>
+    <input value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} />
+    <div style={{height:12}}/>
+    <label>Sifre</label>
+    <input type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} />
+    {e&&<div className="err">{e}</div>}
+    <div style={{height:18}}/>
+    <button className="btn" style={{width:"100%"}} onClick={go}>Giris Yap</button>
+  </div></div>;
+}
+
+function Panel({onLogout}){
+  const [token,setToken]=useState(localStorage.getItem("ocrx_gh_token")||"");
+  const [data,setData]=useState({hotels:[],devices:[]});
+  const [sha,setSha]=useState(null);
+  const [tab,setTab]=useState("devices");
+  const [toast,setToast]=useState("");
+  const [loading,setLoading]=useState(true);
+  const notify=(m)=>{setToast(m);setTimeout(()=>setToast(""),2600);};
+
+  const reload=async()=>{ setLoading(true);
+    try{const {data,sha}=await ghLoad(token);setData(data);setSha(sha);}
+    catch(e){notify(e.message);} setLoading(false); };
+  useEffect(()=>{reload();},[]);
+
+  const persist=async(next)=>{
+    if(!token){notify("Once Ayarlar'dan GitHub token girin (kaydetmek icin).");return;}
+    try{const nsha=await ghSave(token,next,sha);setData(next);setSha(nsha);notify("Kaydedildi.");}
+    catch(e){notify(e.message);}
+  };
+
+  return <div className="wrap">
+    <div className="topbar">
+      <h1>🔐 OCRX Lisans Paneli</h1>
+      <div className="row">
+        <span style={{opacity:.9,fontSize:13}}>{token?"● token tanimli":"○ token yok (salt-okunur)"}</span>
+        <button className="btn ghost sm" onClick={reload}>Yenile</button>
+        <button className="btn ghost sm" onClick={onLogout}>Cikis</button>
+      </div>
+    </div>
+
+    <div className="tabs">
+      <button className={"btn tab"+(tab==="devices"?" active":"")} onClick={()=>setTab("devices")}>Cihazlar</button>
+      <button className={"btn tab"+(tab==="hotels"?" active":"")} onClick={()=>setTab("hotels")}>Oteller</button>
+      <button className={"btn tab"+(tab==="settings"?" active":"")} onClick={()=>setTab("settings")}>Ayarlar</button>
+    </div>
+
+    {loading? <div className="card">Yukleniyor…</div> :
+      tab==="hotels"? <Hotels data={data} onChange={persist} notify={notify}/> :
+      tab==="devices"? <Devices data={data} onChange={persist} notify={notify}/> :
+      <Settings token={token} setToken={(t)=>{setToken(t);localStorage.setItem("ocrx_gh_token",t);}} reload={reload}/>}
+
+    {toast&&<div className="toast">{toast}</div>}
+  </div>;
+}
+
+// ---------------- OTELLER ----------------
+function Hotels({data,onChange,notify}){
+  const [name,setName]=useState("");
+  const add=()=>{ const n=name.trim(); if(!n)return;
+    if(data.hotels.some(h=>h.name.toLowerCase()===n.toLowerCase())){notify("Bu otel zaten var.");return;}
+    onChange({...data,hotels:[...data.hotels,{id:uid(),name:n}]}); setName(""); };
+  const rename=(id)=>{ const h=data.hotels.find(x=>x.id===id); const v=prompt("Otel adi:",h.name);
+    if(v&&v.trim()) onChange({...data,hotels:data.hotels.map(x=>x.id===id?{...x,name:v.trim()}:x)}); };
+  const del=(id)=>{ const cnt=data.devices.filter(d=>d.hotelId===id).length;
+    if(!confirm(cnt?`Bu otelde ${cnt} cihaz var. Otel silinsin mi? (cihazlar otelsiz kalir)`:"Otel silinsin mi?"))return;
+    onChange({...data,hotels:data.hotels.filter(x=>x.id!==id),
+      devices:data.devices.map(d=>d.hotelId===id?{...d,hotelId:null}:d)}); };
+  return <div className="card">
+    <h3 style={{marginTop:0}}>Oteller</h3>
+    <div className="row" style={{marginBottom:14}}>
+      <div style={{flex:1,minWidth:220}}><input placeholder="Yeni otel adi" value={name}
+        onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}/></div>
+      <button className="btn ok" onClick={add}>+ Otel Ekle</button>
+    </div>
+    <table><thead><tr><th>Otel</th><th>Cihaz</th><th className="right" style={{textAlign:"right"}}>Islem</th></tr></thead>
+      <tbody>{data.hotels.length===0&&<tr><td colSpan="3" className="muted">Henuz otel yok.</td></tr>}
+        {data.hotels.map(h=>{const c=data.devices.filter(d=>d.hotelId===h.id).length;
+          return <tr key={h.id}><td><b>{h.name}</b></td><td>{c}</td>
+            <td style={{textAlign:"right"}}>
+              <button className="btn ghost sm" onClick={()=>rename(h.id)}>Duzenle</button>{" "}
+              <button className="btn danger sm" onClick={()=>del(h.id)}>Sil</button></td></tr>;})}
+      </tbody></table>
+  </div>;
+}
+
+// ---------------- CIHAZLAR ----------------
+function Devices({data,onChange,notify}){
+  const [q,setQ]=useState("");
+  const [hf,setHf]=useState("all");
+  const [form,setForm]=useState(null); // ekleme/duzenleme formu
+  const hotelName=(id)=>data.hotels.find(h=>h.id===id)?.name||"—";
+
+  const filtered=useMemo(()=>data.devices.filter(d=>{
+    if(hf!=="all"&&d.hotelId!==hf) return false;
+    if(!q) return true; const s=q.toLowerCase();
+    return (d.mac||"").toLowerCase().includes(s)||(d.pcName||"").toLowerCase().includes(s)
+      ||hotelName(d.hotelId).toLowerCase().includes(s);
+  }),[data,q,hf]);
+
+  const save=(dev)=>{
+    const mac=normMac(dev.mac);
+    if(!mac){notify("Gecerli MAC girin.");return;}
+    const exists=data.devices.find(d=>d.mac===mac && d.id!==dev.id);
+    if(exists){notify("Bu MAC zaten kayitli.");return;}
+    const rec={...dev,mac};
+    const list=data.devices.some(d=>d.id===rec.id)
+      ? data.devices.map(d=>d.id===rec.id?rec:d) : [...data.devices,rec];
+    onChange({...data,devices:list}); setForm(null);
+  };
+  const toggle=(d)=>onChange({...data,devices:data.devices.map(x=>x.id===d.id?{...x,active:!x.active}:x)});
+  const del=(d)=>{ if(confirm(`${d.pcName||d.mac} silinsin mi?`))
+    onChange({...data,devices:data.devices.filter(x=>x.id!==d.id)}); };
+
+  return <div className="card">
+    <div className="row" style={{marginBottom:14}}>
+      <h3 style={{margin:0}}>Cihazlar</h3>
+      <button className="btn ok right" onClick={()=>setForm({id:uid(),mac:"",pcName:"",hotelId:data.hotels[0]?.id||null,active:false,start:todayStr(),end:plusYears(2)})}>+ Cihaz Ekle</button>
+    </div>
+    <div className="row" style={{marginBottom:12}}>
+      <div style={{flex:1,minWidth:200}}><input placeholder="Ara: MAC, PC adi, otel…" value={q} onChange={e=>setQ(e.target.value)}/></div>
+      <div style={{minWidth:180}}>
+        <select value={hf} onChange={e=>setHf(e.target.value)}>
+          <option value="all">Tum oteller</option>
+          {data.hotels.map(h=><option key={h.id} value={h.id}>{h.name}</option>)}
+        </select>
+      </div>
+    </div>
+    <div style={{overflowX:"auto"}}>
+    <table><thead><tr>
+      <th>Durum</th><th>MAC</th><th>PC Adi</th><th>Otel</th><th>Baslangic</th><th>Bitis</th><th style={{textAlign:"right"}}>Islem</th>
+    </tr></thead><tbody>
+      {filtered.length===0&&<tr><td colSpan="7" className="muted">Kayit yok.</td></tr>}
+      {filtered.map(d=>{const s=deviceStatus(d);return <tr key={d.id}>
+        <td><span className={"pill "+s.cls}>{s.txt}</span></td>
+        <td><code>{d.mac}</code></td><td>{d.pcName||"—"}</td><td>{hotelName(d.hotelId)}</td>
+        <td>{d.start}</td><td>{d.end}</td>
+        <td style={{textAlign:"right",whiteSpace:"nowrap"}}>
+          <button className={"btn sm "+(d.active?"ghost":"ok")} onClick={()=>toggle(d)}>{d.active?"Pasif yap":"Aktif et"}</button>{" "}
+          <button className="btn ghost sm" onClick={()=>setForm({...d})}>Duzenle</button>{" "}
+          <button className="btn danger sm" onClick={()=>del(d)}>Sil</button>
+        </td></tr>;})}
+    </tbody></table>
+    </div>
+    {form&&<DeviceForm form={form} hotels={data.hotels} onCancel={()=>setForm(null)} onSave={save}/>}
+  </div>;
+}
+
+function DeviceForm({form,hotels,onCancel,onSave}){
+  const [f,setF]=useState(form);
+  const set=(k,v)=>setF(s=>({...s,[k]:v}));
+  return <div style={{position:"fixed",inset:0,background:"rgba(15,25,45,.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50}}>
+    <div className="card" style={{width:440,maxWidth:"92vw"}}>
+      <h3 style={{marginTop:0}}>{form.mac?"Cihaz Duzenle":"Cihaz Ekle"}</h3>
+      <label>MAC Adresi</label>
+      <input value={f.mac} onChange={e=>set("mac",e.target.value)} placeholder="AA:BB:CC:DD:EE:FF"/>
+      <div style={{height:10}}/>
+      <label>PC Adi</label>
+      <input value={f.pcName} onChange={e=>set("pcName",e.target.value)} placeholder="Bilgisayar adi"/>
+      <div style={{height:10}}/>
+      <label>Otel</label>
+      <select value={f.hotelId||""} onChange={e=>set("hotelId",e.target.value||null)}>
+        <option value="">— Otelsiz —</option>
+        {hotels.map(h=><option key={h.id} value={h.id}>{h.name}</option>)}
+      </select>
+      <div style={{height:10}}/>
+      <div className="grid">
+        <div><label>Baslangic</label><input type="date" value={f.start} onChange={e=>set("start",e.target.value)}/></div>
+        <div><label>Bitis</label><input type="date" value={f.end} onChange={e=>set("end",e.target.value)}/></div>
+      </div>
+      <div style={{height:12}}/>
+      <label style={{display:"flex",alignItems:"center",gap:8,fontSize:14,color:"#1a1f27",fontWeight:700}}>
+        <input type="checkbox" style={{width:"auto"}} checked={!!f.active} onChange={e=>set("active",e.target.checked)}/>
+        Aktif (lisans calissin)
+      </label>
+      <div className="row" style={{marginTop:18,justifyContent:"flex-end"}}>
+        <button className="btn ghost" onClick={onCancel}>Vazgec</button>
+        <button className="btn ok" onClick={()=>onSave(f)}>Kaydet</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ---------------- AYARLAR ----------------
+function Settings({token,setToken,reload}){
+  const [t,setT]=useState(token);
+  return <div className="card">
+    <h3 style={{marginTop:0}}>Ayarlar — GitHub Token</h3>
+    <p className="muted" style={{fontSize:14}}>
+      Kaydetme/guncelleme yapabilmek icin <b>{OWNER}/{REPO}</b> deposunda <code>Contents: Read and write</code>
+      yetkili bir <b>fine-grained token</b> gerekir. Token yalnizca bu tarayicida (localStorage) saklanir,
+      hicbir yere gonderilmez. Salt-okuma (listeleme) token'siz de calisir.
+    </p>
+    <label>GitHub Personal Access Token</label>
+    <input type="password" value={t} onChange={e=>setT(e.target.value)} placeholder="github_pat_…"/>
+    <div className="row" style={{marginTop:14}}>
+      <button className="btn ok" onClick={()=>{setToken(t.trim());reload();}}>Kaydet</button>
+      {token&&<button className="btn ghost" onClick={()=>{setToken("");}}>Temizle</button>}
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

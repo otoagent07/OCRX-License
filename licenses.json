@@ -1,4 +1,9 @@
 {
-  "hotels": [],
+  "hotels": [
+    {
+      "id": "xlc03r2",
+      "name": "RMOS"
+    }
+  ],
   "devices": []
 }

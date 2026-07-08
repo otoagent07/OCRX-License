@@ -54,6 +54,15 @@
       "active": true,
       "start": "2026-07-07",
       "end": "2028-07-08"
+    },
+    {
+      "id": "5ter3qc",
+      "key": "55021-0A5DC-A4532-987DE",
+      "pcName": "Resepsiyon",
+      "hotelId": "qxginzz",
+      "active": true,
+      "start": "2026-07-08",
+      "end": "2028-07-08"
     }
   ]
 }

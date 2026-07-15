@@ -82,7 +82,7 @@
       "key": "23C59-AA7F4-8D106-36682",
       "pcName": "p2",
       "hotelId": "zowm9ta",
-      "active": false,
+      "active": true,
       "start": "2026-07-15",
       "end": "2028-07-15"
     }

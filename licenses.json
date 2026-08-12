@@ -102,6 +102,15 @@
       "active": true,
       "start": "2026-07-16",
       "end": "2027-07-16"
+    },
+    {
+      "id": "wmo7sc3",
+      "key": "0AC9B-C2AA4-8B636-CFE32",
+      "pcName": "DESK2",
+      "hotelId": "z42y9dl",
+      "active": true,
+      "start": "2026-08-12",
+      "end": "2028-08-12"
     }
   ]
 }

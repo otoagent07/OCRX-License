@@ -115,6 +115,15 @@
       "active": true,
       "start": "2026-08-12",
       "end": "2028-08-12"
+    },
+    {
+      "id": "gdc4fts",
+      "key": "E18D2-D11FB-F5F18-982C5",
+      "pcName": "ONBURO-MD",
+      "hotelId": "897knb0",
+      "active": true,
+      "start": "2026-08-14",
+      "end": "2028-08-14"
     }
   ]
 }

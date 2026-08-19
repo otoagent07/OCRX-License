@@ -146,6 +146,15 @@
       "active": true,
       "start": "2026-08-19",
       "end": "2028-08-19"
+    },
+    {
+      "id": "wv8gep9",
+      "key": "59CA2-15AF7-A7635-E20D7",
+      "pcName": "HOYRAZ",
+      "hotelId": "xlc03r2",
+      "active": true,
+      "start": "2026-08-19",
+      "end": "2080-08-19"
     }
   ]
 }

@@ -159,6 +159,15 @@
       "active": true,
       "start": "2026-08-19",
       "end": "2080-08-19"
+    },
+    {
+      "id": "xqq0dgu",
+      "key": "00A3B-9B6A0-2F6E5-A78F8",
+      "pcName": "OMER",
+      "hotelId": "xlc03r2",
+      "active": true,
+      "start": "2026-08-25",
+      "end": "2028-08-25"
     }
   ]
 }

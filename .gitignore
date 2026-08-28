@@ -1,0 +1,4 @@
+# Yerel yedekler ve yedekleme araclari public repoya PUSH EDILMEZ.
+backups/
+backup_licenses.bat
+backup_licenses.ps1

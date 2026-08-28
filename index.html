@@ -54,6 +54,8 @@ const {useState,useEffect,useMemo} = React;
 const OWNER="otoagent07", REPO="OCRX-License", FILE="licenses.json", BRANCH="main";
 const ADMIN_USER="rmos", ADMIN_PASS="ocrx";
 const API=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`;
+const POOL_REPO="OCRX-Pool", POOL_FILE="pool.json";
+const POOL_API=`https://api.github.com/repos/${OWNER}/${POOL_REPO}/contents/${POOL_FILE}`;
 
 // ---- yardimcilar ----
 const todayStr=()=>new Date().toISOString().slice(0,10);
@@ -90,6 +92,30 @@ async function ghSave(token,data,sha){
   return (await r.json()).content.sha;
 }
 
+// ---- Havuz (OCRX-Pool/pool.json) okuma/yazma ----
+// Cihazlar lisanssizken kendilerini buraya yazar; panel listeler, otele ekler,
+// gereksizleri siler. Okuma token'siz de calisir (depo public).
+async function poolLoad(token){
+  const headers={"Accept":"application/vnd.github+json"};
+  if(token) headers.Authorization=`Bearer ${token}`;
+  const r=await fetch(POOL_API+`?ref=${BRANCH}&t=`+Date.now(),{headers});
+  if(r.status===404) return {devices:[],sha:null};
+  if(!r.ok) throw new Error("Havuz okuma hatasi: "+r.status);
+  const j=await r.json();
+  let d={}; try{d=JSON.parse(b64decode(j.content));}catch(e){d={};}
+  return {devices:Array.isArray(d.devices)?d.devices:[],sha:j.sha};
+}
+async function poolSave(token,devices,sha){
+  const body={message:"havuz guncelleme",branch:BRANCH,
+    content:b64encode(JSON.stringify({devices},null,2))};
+  if(sha) body.sha=sha;
+  const r=await fetch(POOL_API,{method:"PUT",
+    headers:{Authorization:`Bearer ${token}`,"Accept":"application/vnd.github+json"},
+    body:JSON.stringify(body)});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||("Havuz kaydetme hatasi "+r.status));}
+  return (await r.json()).content.sha;
+}
+
 // ================= UYGULAMA =================
 function App(){
   const [authed,setAuthed]=useState(sessionStorage.getItem("ocrx_admin")==="1");
@@ -121,19 +147,37 @@ function Panel({onLogout}){
   const [sha,setSha]=useState(null);
   const [tab,setTab]=useState("devices");
   const [hotelDevices,setHotelDevices]=useState(null); // Oteller>Cihazlar gorunumu
+  const [poolToken,setPoolToken]=useState(localStorage.getItem("ocrx_pool_token")||"");
+  const [pool,setPool]=useState({devices:[],sha:null});
   const [toast,setToast]=useState("");
+  const [pending,setPending]=useState(null); // havuzdan "Otele ekle" ile gelen cihaz
   const [loading,setLoading]=useState(true);
   const notify=(m)=>{setToast(m);setTimeout(()=>setToast(""),2600);};
 
   const reload=async()=>{ setLoading(true);
     try{const {data,sha}=await ghLoad(token);setData(data);setSha(sha);}
-    catch(e){notify(e.message);} setLoading(false); };
+    catch(e){notify(e.message);}
+    // Havuz okumasi bagimsizdir: hata verse de panel calismaya devam eder.
+    try{setPool(await poolLoad(poolToken||token));}catch(e){}
+    setLoading(false); };
   useEffect(()=>{reload();},[]);
 
   const persist=async(next)=>{
     if(!token){notify("Once Ayarlar'dan GitHub token girin (kaydetmek icin).");return;}
     try{const nsha=await ghSave(token,next,sha);setData(next);setSha(nsha);notify("Kaydedildi.");}
     catch(e){notify(e.message);}
+  };
+
+  // Havuzdan kayit silme (elle temizlik + otele eklenince otomatik dusurme).
+  const poolRemove=async(keys,silent)=>{
+    const tok=poolToken||token;
+    const set=new Set(keys.map(normKey));
+    const left=pool.devices.filter(d=>!set.has(normKey(d.key)));
+    if(left.length===pool.devices.length) return;
+    if(!tok){ if(!silent) notify("Havuzdan silmek icin Ayarlar'dan token girin."); return; }
+    try{ const nsha=await poolSave(tok,left,pool.sha); setPool({devices:left,sha:nsha});
+         if(!silent) notify("Havuzdan silindi."); }
+    catch(e){ if(!silent) notify(e.message); }
   };
 
   return <div className="wrap">
@@ -149,17 +193,27 @@ function Panel({onLogout}){
     <div className="tabs">
       <button className={"btn tab"+(tab==="devices"?" active":"")} onClick={()=>setTab("devices")}>Cihazlar</button>
       <button className={"btn tab"+(tab==="hotels"?" active":"")} onClick={()=>setTab("hotels")}>Oteller</button>
+      <button className={"btn tab"+(tab==="pool"?" active":"")} onClick={()=>setTab("pool")}>Havuz{pool.devices.length?` (${pool.devices.length})`:""}</button>
       <button className={"btn tab"+(tab==="settings"?" active":"")} onClick={()=>setTab("settings")}>Ayarlar</button>
     </div>
 
     {loading? <div className="card">Yukleniyor…</div> :
       tab==="hotels"? (hotelDevices
         ? <Devices data={data} onChange={persist} notify={notify}
+                   pool={pool.devices} onPoolConsume={poolRemove}
                    lockedHotelId={hotelDevices} onBack={()=>setHotelDevices(null)}/>
         : <Hotels data={data} onChange={persist} notify={notify}
                   onOpenDevices={setHotelDevices}/>) :
-      tab==="devices"? <Devices data={data} onChange={persist} notify={notify}/> :
-      <Settings token={token} setToken={(t)=>{setToken(t);localStorage.setItem("ocrx_gh_token",t);}} reload={reload}/>}
+      tab==="devices"? <Devices data={data} onChange={persist} notify={notify}
+                                pool={pool.devices} onPoolConsume={poolRemove}
+                                pending={pending} onPendingUsed={()=>setPending(null)}/> :
+      tab==="pool"? <Pool pool={pool.devices} hotels={data.hotels} notify={notify}
+                          onRemove={poolRemove} onAdd={(dev)=>{setTab("devices");setPending(dev);}}
+                          reload={reload}/> :
+      <Settings token={token} setToken={(t)=>{setToken(t);localStorage.setItem("ocrx_gh_token",t);}}
+                poolToken={poolToken}
+                setPoolToken={(t)=>{setPoolToken(t);localStorage.setItem("ocrx_pool_token",t);}}
+                reload={reload}/>}
 
     {toast&&<div className="toast">{toast}</div>}
   </div>;
@@ -197,10 +251,12 @@ function Hotels({data,onChange,notify,onOpenDevices}){
 }
 
 // ---------------- CIHAZLAR ----------------
-function Devices({data,onChange,notify,lockedHotelId,onBack}){
+function Devices({data,onChange,notify,lockedHotelId,onBack,pool,onPoolConsume,pending,onPendingUsed}){
   const [q,setQ]=useState("");
   const [hf,setHf]=useState("all");
   const [form,setForm]=useState(null); // ekleme/duzenleme formu
+  // Havuz sekmesinden "Otele ekle" ile gelindiyse formu dolu olarak ac.
+  useEffect(()=>{ if(pending){ setForm(pending); onPendingUsed&&onPendingUsed(); } },[pending]);
   const hotelName=(id)=>data.hotels.find(h=>h.id===id)?.name||"—";
   // Oteller>Cihazlar gorunumu: otele kilitli (filtre gizli, yeni cihaz o otele).
   const effHf = lockedHotelId || hf;
@@ -221,6 +277,8 @@ function Devices({data,onChange,notify,lockedHotelId,onBack}){
     const list=data.devices.some(d=>d.id===rec.id)
       ? data.devices.map(d=>d.id===rec.id?rec:d) : [...data.devices,rec];
     onChange({...data,devices:list}); setForm(null);
+    // Otele eklenen cihaz havuzda bekliyorsa oradan otomatik dusulur.
+    onPoolConsume&&onPoolConsume([key],true);
   };
   const toggle=(d)=>onChange({...data,devices:data.devices.map(x=>x.id===d.id?{...x,active:!x.active}:x)});
   const del=(d)=>{ if(confirm(`${d.pcName||d.key} silinsin mi?`))
@@ -257,18 +315,39 @@ function Devices({data,onChange,notify,lockedHotelId,onBack}){
         </td></tr>;})}
     </tbody></table>
     </div>
-    {form&&<DeviceForm form={form} hotels={data.hotels} onCancel={()=>setForm(null)} onSave={save}/>}
+    {form&&<DeviceForm form={form} hotels={data.hotels} pool={pool||[]}
+                       onCancel={()=>setForm(null)} onSave={save}/>}
   </div>;
 }
 
-function DeviceForm({form,hotels,onCancel,onSave}){
+function DeviceForm({form,hotels,pool,onCancel,onSave}){
   const [f,setF]=useState(form);
+  const [pick,setPick]=useState(false); // havuz secim listesi acik mi
   const set=(k,v)=>setF(s=>({...s,[k]:v}));
+  const fromPool=(d)=>{ setF(s=>({...s,key:normKey(d.key),pcName:d.pcName||""})); setPick(false); };
   return <div style={{position:"fixed",inset:0,background:"rgba(15,25,45,.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50}}>
     <div className="card" style={{width:440,maxWidth:"92vw"}}>
       <h3 style={{marginTop:0}}>{form.key?"Cihaz Duzenle":"Cihaz Ekle"}</h3>
-      <label>Cihaz Anahtarı (KEY)</label>
+      <div className="row" style={{marginBottom:4}}>
+        <label style={{margin:0}}>Cihaz Anahtarı (KEY)</label>
+        <button className="btn ghost sm right" onClick={()=>setPick(v=>!v)}>
+          Havuzdan çağır{(pool&&pool.length)?` (${pool.length})`:""}</button>
+      </div>
       <input value={f.key} onChange={e=>set("key",e.target.value)} placeholder="XXXXX-XXXXX-XXXXX-XXXXX"/>
+      {pick&&<div style={{border:"1px solid var(--border)",borderRadius:8,marginTop:8,
+                          maxHeight:190,overflowY:"auto",background:"#fafcff"}}>
+        {(!pool||pool.length===0)&&<div className="muted" style={{padding:10,fontSize:13}}>
+          Havuzda bekleyen cihaz yok.</div>}
+        {(pool||[]).map((d,i)=><div key={d.key+i} className="row"
+            style={{padding:"8px 10px",borderBottom:"1px solid var(--border)",gap:8}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div><b>{d.pcName||"—"}</b> <span className="muted" style={{fontSize:12}}>{d.ts||""}</span></div>
+            <div><code style={{fontSize:12}}>{d.key}</code></div>
+            {(d.user||d.dbId)&&<div className="muted" style={{fontSize:12}}>{d.user||""}{d.dbId?` · db ${d.dbId}`:""}</div>}
+          </div>
+          <button className="btn sm" onClick={()=>fromPool(d)}>Seç</button>
+        </div>)}
+      </div>}
       <div style={{height:10}}/>
       <label>PC Adi</label>
       <input value={f.pcName} onChange={e=>set("pcName",e.target.value)} placeholder="Bilgisayar adi"/>
@@ -296,9 +375,64 @@ function DeviceForm({form,hotels,onCancel,onSave}){
   </div>;
 }
 
+// ---------------- HAVUZ ----------------
+// Lisanssiz cihazlar kendini buraya yazar (exe otomatik bildirir). Buradan
+// otele eklenir ya da gereksiz kayitlar toplu silinir.
+function Pool({pool,hotels,notify,onRemove,onAdd,reload}){
+  const [sel,setSel]=useState({});
+  const [q,setQ]=useState("");
+  const list=useMemo(()=>pool.filter(d=>{
+    if(!q) return true; const t=q.toLowerCase();
+    return (d.key||"").toLowerCase().includes(t)||(d.pcName||"").toLowerCase().includes(t)
+      ||(d.user||"").toLowerCase().includes(t);
+  }),[pool,q]);
+  const selKeys=Object.keys(sel).filter(k=>sel[k]);
+  const toggle=(k)=>setSel(s=>({...s,[k]:!s[k]}));
+  const allOn=list.length>0&&list.every(d=>sel[d.key]);
+  const toggleAll=()=>{const n={...sel};list.forEach(d=>{n[d.key]=!allOn;});setSel(n);};
+  const delSel=()=>{ if(!selKeys.length){notify("Önce kayıt seçin.");return;}
+    if(!confirm(`${selKeys.length} kayıt havuzdan silinsin mi?`))return;
+    onRemove(selKeys); setSel({}); };
+  return <div className="card">
+    <div className="row" style={{marginBottom:14}}>
+      <h3 style={{margin:0}}>Havuz — Bekleyen Cihazlar</h3>
+      <button className="btn ghost sm right" onClick={reload}>Yenile</button>
+      <button className="btn danger sm" onClick={delSel}>Seçilenleri Sil</button>
+    </div>
+    <p className="muted" style={{fontSize:13,marginTop:0}}>
+      Lisansı olmayan cihazlar kendilerini otomatik olarak buraya bildirir.
+      "Otele Ekle" ile cihazı lisansa geçirin; kayıt havuzdan otomatik düşer.
+    </p>
+    <div className="row" style={{marginBottom:12}}>
+      <div style={{flex:1,minWidth:200}}><input placeholder="Ara: KEY, PC adı, kullanıcı…"
+        value={q} onChange={e=>setQ(e.target.value)}/></div>
+    </div>
+    <div style={{overflowX:"auto"}}>
+    <table><thead><tr>
+      <th style={{width:34}}><input type="checkbox" style={{width:"auto"}} checked={allOn} onChange={toggleAll}/></th>
+      <th>PC Adı</th><th>KEY</th><th>Kullanıcı / DB</th><th>Sürüm</th><th>Son Görülme</th>
+      <th style={{textAlign:"right"}}>İşlem</th>
+    </tr></thead><tbody>
+      {list.length===0&&<tr><td colSpan="7" className="muted">Havuzda bekleyen cihaz yok.</td></tr>}
+      {list.map((d,i)=><tr key={d.key+i}>
+        <td><input type="checkbox" style={{width:"auto"}} checked={!!sel[d.key]} onChange={()=>toggle(d.key)}/></td>
+        <td><b>{d.pcName||"—"}</b></td><td><code>{d.key}</code></td>
+        <td>{d.user||"—"}{d.dbId?` · ${d.dbId}`:""}</td><td>{d.version||"—"}</td><td>{d.ts||"—"}</td>
+        <td style={{textAlign:"right",whiteSpace:"nowrap"}}>
+          <button className="btn ok sm" onClick={()=>onAdd({id:uid(),key:normKey(d.key),
+            pcName:d.pcName||"",hotelId:hotels[0]?.id||null,active:true,
+            start:todayStr(),end:plusYears(2)})}>Otele Ekle</button>{" "}
+          <button className="btn danger sm" onClick={()=>{ if(confirm(`${d.pcName||d.key} havuzdan silinsin mi?`)) onRemove([d.key]); }}>Sil</button>
+        </td></tr>)}
+    </tbody></table>
+    </div>
+  </div>;
+}
+
 // ---------------- AYARLAR ----------------
-function Settings({token,setToken,reload}){
+function Settings({token,setToken,poolToken,setPoolToken,reload}){
   const [t,setT]=useState(token);
+  const [pt,setPt]=useState(poolToken||"");
   return <div className="card">
     <h3 style={{marginTop:0}}>Ayarlar — GitHub Token</h3>
     <p className="muted" style={{fontSize:14}}>
@@ -311,6 +445,19 @@ function Settings({token,setToken,reload}){
     <div className="row" style={{marginTop:14}}>
       <button className="btn ok" onClick={()=>{setToken(t.trim());reload();}}>Kaydet</button>
       {token&&<button className="btn ghost" onClick={()=>{setToken("");}}>Temizle</button>}
+    </div>
+    <hr style={{border:"none",borderTop:"1px solid var(--border)",margin:"22px 0"}}/>
+    <h3 style={{marginTop:0}}>Havuz Token (isteğe bağlı)</h3>
+    <p className="muted" style={{fontSize:14}}>
+      Havuz kayıtlarını <b>silmek</b> için <b>{OWNER}/{POOL_REPO}</b> deposunda
+      <code>Contents: Read and write</code> yetkili token gerekir. Boş bırakılırsa
+      yukarıdaki token kullanılır. Havuzu <b>okumak</b> token'siz de çalışır.
+    </p>
+    <label>Havuz Token</label>
+    <input type="password" value={pt} onChange={e=>setPt(e.target.value)} placeholder="github_pat_…"/>
+    <div className="row" style={{marginTop:14}}>
+      <button className="btn ok" onClick={()=>{setPoolToken(pt.trim());reload();}}>Kaydet</button>
+      {poolToken&&<button className="btn ghost" onClick={()=>{setPoolToken("");setPt("");}}>Temizle</button>}
     </div>
   </div>;
 }

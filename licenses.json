@@ -186,6 +186,15 @@
       "active": true,
       "start": "2026-08-28",
       "end": "2028-08-28"
+    },
+    {
+      "id": "yfigr4p",
+      "key": "07BEF-8C7C2-0B85E-65FD9",
+      "pcName": "SIDESUDESK1",
+      "hotelId": "7v6ajvn",
+      "active": true,
+      "start": "2026-09-09",
+      "end": "2028-09-09"
     }
   ]
 }

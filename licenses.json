@@ -199,6 +199,15 @@
       "active": true,
       "start": "2026-09-09",
       "end": "2028-09-09"
+    },
+    {
+      "id": "4qomf8g",
+      "key": "44ECD-169FF-1FA6A-4C701",
+      "pcName": "DESKTOP-FG7T97N",
+      "hotelId": "rs7meuj",
+      "active": true,
+      "start": "2026-10-13",
+      "end": "2028-10-13"
     }
   ]
 }

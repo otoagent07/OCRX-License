@@ -212,6 +212,15 @@
       "active": true,
       "start": "2026-10-13",
       "end": "2028-10-13"
+    },
+    {
+      "id": "r966dco",
+      "key": "E4BCB-5CF12-04534-374EE",
+      "pcName": "HTL-ANT-RES2-LENOVO",
+      "hotelId": "6rp6zon",
+      "active": true,
+      "start": "2026-10-15",
+      "end": "2028-10-15"
     }
   ]
 }

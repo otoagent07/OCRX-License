@@ -238,6 +238,15 @@
       "active": true,
       "start": "2026-10-17",
       "end": "2028-10-17"
+    },
+    {
+      "id": "usmln55",
+      "key": "4F0B6-891A7-B3DB6-F0EDC",
+      "pcName": "RESEPSIYON1",
+      "hotelId": "xlc03r2",
+      "active": true,
+      "start": "2026-10-22",
+      "end": "2028-10-22"
     }
   ]
 }

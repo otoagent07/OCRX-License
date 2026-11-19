@@ -251,6 +251,15 @@
       "active": true,
       "start": "2026-10-22",
       "end": "2028-10-22"
+    },
+    {
+      "id": "o6ezgrn",
+      "key": "0C3DE-7580C-D6968-77B04",
+      "pcName": "DESK1",
+      "hotelId": "3sg1z3u",
+      "active": true,
+      "start": "2026-11-19",
+      "end": "2028-11-19"
     }
   ]
 }
